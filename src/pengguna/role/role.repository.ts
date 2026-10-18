@@ -2,15 +2,32 @@ import { Injectable } from "@nestjs/common";
 import { PrismaService } from "../../common/prisma.service";
 import { Prisma, Role } from "@prisma/client";
 import { RoleCreateDTO } from "./role.model";
+import { CacheRepository } from "../../common/cache.repository";
 
 @Injectable()
-export class RoleRepository {
+export class RoleRepository extends CacheRepository {
+    // private readonly logger = new Logger('RoleRepository');
     constructor (
         private prisma: PrismaService
-    ) {}
+    ) {
+        super();
+    }
+
+    protected getNamespace(): string {
+        return 'roles';
+    }
 
     async findMany(): Promise<Role[]> {
-        return await this.prisma.role.findMany();
+        const cacheKey = this.getCacheKey('all', 'list');
+        const cachedData = await this.getCacheData<Role[]>(cacheKey);
+        if (cachedData){
+            this.logger.debug('Fetching data role from cache')
+            return cachedData;
+        }
+        this.logger.debug('Fetching data role from database');
+        const dbData = await this.prisma.role.findMany();
+        await this.setCacheData(cacheKey, dbData);
+        return dbData;
     }
 
     async findById(
@@ -38,9 +55,12 @@ export class RoleRepository {
         tx?: Prisma.TransactionClient
     ): Promise<Role> {
         const client = tx || this.prisma;
-        return await client.role.create({
+        const result = await client.role.create({
             data: data
         })
+
+        await this.invalidateNamespace();
+        return result;
     }
 
     async update(
@@ -49,10 +69,13 @@ export class RoleRepository {
         tx?: Prisma.TransactionClient
     ): Promise<Role> {
         const client = tx || this.prisma;
-        return await client.role.update({
+        const result = await client.role.update({
             where: { id: id},
             data: data
         })
+
+        await this.invalidateNamespace();
+        return result
     }
 
     async remove(
@@ -60,8 +83,11 @@ export class RoleRepository {
         tx?: Prisma.TransactionClient
     ): Promise<Role> {
         const client = tx || this.prisma;
-        return await client.role.delete({
+        const result = await client.role.delete({
             where: { id: id }
-        })
+        });
+
+        await this.invalidateNamespace();
+        return result;
     }
 }
