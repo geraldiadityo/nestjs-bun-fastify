@@ -19,3 +19,12 @@ model Role {
 
   @@map("role")
 }
+
+model Pegawai {
+  id   Int    @id @default(autoincrement())
+  nik  String @unique
+  nama String
+
+  @@index([nama(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@map("pegawai")
+}

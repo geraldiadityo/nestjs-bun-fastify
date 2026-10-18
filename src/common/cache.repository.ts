@@ -2,6 +2,7 @@ import { Inject, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
 import { KEYV_INSTANCE } from "./keyv.provider";
 import Keyv from "keyv";
 import KeyvRedis from "@keyv/redis";
+import { createHash } from 'crypto';
 
 export abstract class CacheRepository implements OnModuleInit, OnModuleDestroy {
     @Inject(KEYV_INSTANCE) protected keyv!: Keyv
@@ -96,4 +97,30 @@ export abstract class CacheRepository implements OnModuleInit, OnModuleDestroy {
         return prefix ? `${prefix}:${raw}` : raw
     }
 
+    private sortObject(obj: any): any {
+        if (obj === null || typeof obj !== 'object') {
+            return obj
+        }
+        
+        if (Array.isArray(obj)) {
+            return obj.map((item) => this.sortObject(item))
+        }
+
+        return Object.keys(obj)
+            .sort()
+            .reduce((result: Record<string,any>, key) => {
+                result[key] = this.sortObject(obj[key]);
+                return result;
+            }, {});
+    }
+
+    protected getHashedCacheKey(
+        args: any, prefix?: string
+    ): string {
+        const normalized = this.sortObject(args ?? {});
+        const serialized = JSON.stringify(normalized);
+        const hash = createHash('sha256').update(serialized).digest('hex');
+
+        return prefix ? `${prefix}:${hash}` : hash
+    }
 }
